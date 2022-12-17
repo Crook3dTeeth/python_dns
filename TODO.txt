@@ -1,0 +1,6 @@
+
+
+# Threads: 
+    recieve/send to client
+
+    recieve/send to alternative dns servers

@@ -1,43 +1,31 @@
 import datetime
 import socket
+import threading
 import select
+import time
 
 class hostname_table:
-    def __init__(self, fileOutput, max_size, max_load = 0.5):
-        self.data = []
-        self.length = 0
-        self.max_size = max_size
-        self.fileOutput = fileOutput
-
-    def find(self, item):
-        pass
-
-    def add(self, item):
-        pass
-
-    def delete(self, item):
-        pass
+    def __init__(self):
+        self.data = 0
 
 
-def simple_proxy():
+    def add(self):
+        self.data = self.data + 1
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((234, "127.0.0.1"))
+    def printItem(self):
+        print(str(self.data))
+
 
 
 def main():
-    size = 10000
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("127.0.0.1", 4353))
+    test = b'0\xfc\x81\x80\x00\x01\x00\x03\x00\x00\x00\x00\x03www\tinstagram\x03com\x00\x00\x1c\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\r\x94\x00\n\x07geo-p42\xc0\x10\xc0/\x00\x05\x00\x01\x00\x00\r\x94\x00\x17\x0fz-p42-instagram\x04c10r\xc0\x10\xc0E\x00\x1c\x00\x01\x00\x00\x00\xb0\x00\x10*\x03(\x80\xf2a\x00\xe6\xfa\xce\xb0\x0c\x00\x00D '
 
-    sock.sendto(b'test', ("103.20.139.207", 234))
-    #dtResponse = select.select([sock], [], [])
+    # Identification, flags, # questions, # answers RRs, # authority RRs, # additional RRs
+    header_data = []
+    # questions, answers, authority, additional information
+    data = []
 
-    #data, adr = dtResponse[0][0].recvfrom(1024)
-
-
-
-    print()
+    
 
 main()
