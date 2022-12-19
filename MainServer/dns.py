@@ -158,12 +158,6 @@ def decode_packet(data):
         print("ERROR: failed to decode packet")
 
 
-def table_lookup(Name, Type):
-    """ Finds the lookup in the table
-    """
-
-    dnsTable = ()
-
 def recievePacket(data, addr, sock):
     """ Recieves info from the socket
     """
@@ -205,12 +199,6 @@ def DNSServerLookup(data, addr, dns = '8.8.8.8'):
         
     except:
         print("ERROR: Failed to send request to dns server")
-
-def mDNS(ip):
-    """ Used for mDNS
-    """
-    
-    mDNSSock = create_socket(ip, 5353)
 
 
 def commandLine(data):
