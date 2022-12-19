@@ -6,6 +6,7 @@ import threading
 
 # Global settings
 ip = "192.168.2.51"
+isRunning = 1 # best not to change, used for restarting and shutting down
 
 # Debug
 debug = True
@@ -17,11 +18,14 @@ cache_details = True
 cache_entries = False
 
 # Fileoutput (what to output)
-file_output = False
+file_output = True
 file_errors = False
 file_warnings = False
 file_client = False
 file_website = False
+if file_output:
+    date = datetime.datetime.now().strftime("%x-%X").replace(":", "-")
+    file = open(date.replace("/", "-") + "logs.txt", "w")
 
 # Cahce settings
 cache_output = True # saves the cache
@@ -78,7 +82,7 @@ class dns_table:
 def debugPrint(output):
     print(output)
     if file_output:
-        pass
+        file.write(datetime.datetime.now().strftime("X") + output)
 
 
 def create_socket(UDP_IP, DNS_PORT = 53):
@@ -131,7 +135,8 @@ def decode_packet(data):
                     questionData.append((query, dataType, classData))
                     current_count += 1                    
 
-        if headerData[1] & 128:
+
+        if headerData[1][0] & 128:
             current_count = 0
             while current_count < answers:
                 # Name, type, class, TTL, length
@@ -144,8 +149,9 @@ def decode_packet(data):
 
 
 
-    
-        
+                current_count += 1
+                start_index += 12
+
 
         return (headerData, questionData, responseData)
     except:
@@ -167,6 +173,7 @@ def recievePacket(data, addr, sock):
 
     DNSData = DNSServerLookup(data, addr)
     decodedData = decode_packet(DNSData)
+    decodedData2 = decode_packet(data)
     
     try:
         sock.sendto(DNSData, addr)
@@ -206,40 +213,55 @@ def mDNS(ip):
     mDNSSock = create_socket(ip, 5353)
 
 
-def cachePrint(data):
+def commandLine(data):
 
-    while True:
-        input("Press any key")
+    global isRunning
 
-        print(data.dns_table)
-
+    while isRunning:
+        keyPress = input("Press 'h' for commands")
+        if keyPress == 'd':
+            print(data.dns_table)
+        elif keyPress == 'q':
+            file.close()
+            isRunning = False
+        elif keyPress == 'r':
+            isRunning = True
+            debugPrint("restarting...")
+        elif keyPress == 'h':
+            pass
 
 def main():
     """ Main loop"""
-    #cache
-    dnsCache = dns_table()
-    dnsServer = create_socket(ip)
-    print("Socket Created")
-    
-    senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print("Sender Socket Created")
+    global isRunning
 
-    if debug:
-        threading.Thread(target=cachePrint, args=(dnsCache,)).start()
-
-    print("Server Started")
-    while True:
-        recievedRequest = select.select([dnsServer], [], [])
-
-        data, addr = dnsServer.recvfrom(1024)
+    while isRunning > 0:
+        isRunning = 2
+        #cache
+        dnsCache = dns_table()
+        dnsServer = create_socket(ip)
+        print("Socket Created")
         
-        recievePacket(data, addr, dnsServer)
+        senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        print("Sender Socket Created")
 
+        if debug:
+            threading.Thread(target=commandLine, args=(dnsCache,)).start()
 
+        print("Server Started")
+        while isRunning == 2:
+            recievedRequest = select.select([dnsServer], [], [])
 
-        # Threading later
-        #threading.Thread(target=recievePacket, args=(data, addr)).start()
-        #threading.Thread(target=mDNS, args=(ip)).start() # mDNS
-        
+            data, addr = dnsServer.recvfrom(1024)
+            
+            recievePacket(data, addr, dnsServer)
+
+            # Threading later
+            #threading.Thread(target=recievePacket, args=(data, addr)).start()
+            #threading.Thread(target=mDNS, args=(ip)).start() # mDNS
+            
+        senderSocket.close()
+        dnsServer.close()
+
+        dnsCache.shutdown()
 
 main()
