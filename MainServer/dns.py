@@ -81,8 +81,11 @@ class dns_table:
 
 def debugPrint(output):
     print(output)
-    if file_output:
-        file.write(datetime.datetime.now().strftime("X") + output)
+    try:
+        if file_output:
+            file.write(datetime.datetime.now().strftime("X") + str(output) + "\n")
+    except:
+        print("ERROR: failed to write to output file")
 
 
 def create_socket(UDP_IP, DNS_PORT = 53):
@@ -133,7 +136,8 @@ def decode_packet(data):
                     classData = data[start_index + 2: start_index + 4]
 
                     questionData.append((query, dataType, classData))
-                    current_count += 1                    
+                    current_count += 4
+                    start_index += 4                    
 
 
         if headerData[1][0] & 128:
@@ -147,15 +151,41 @@ def decode_packet(data):
                 responseTTL = data[start_index + 6: start_index + 10]
                 responseLength = data[start_index + 10: start_index + 12]
 
-
+                answer = b''
 
                 current_count += 1
                 start_index += 12
+                count = int(data[start_index])
 
+                # small hack to fix start_index not actually being the start index
+
+                if count == 0:
+                    while count == 0 or count > int.from_bytes(responseLength, 'big'):
+                        start_index += 1
+                        count = int(data[start_index])
+
+                while count > 0 and (start_index + count) < data_length:
+                    start_index += 1
+                    end_index = start_index
+
+                    answer += data[start_index: start_index + count]
+
+                    start_index += count
+                    count = int(data[end_index + count])
+
+                    if count != 0:
+                        answer += b'.'
+                    else:
+                        responseData.append((answer, responseName, responseType, responseClass, responseTTL, responseLength))
+
+
+        if file_output:
+            if responseData != []:
+                debugPrint(responseData)
 
         return (headerData, questionData, responseData)
     except:
-        print("ERROR: failed to decode packet")
+        debugPrint("ERROR: failed to decode packet")
 
 
 def recievePacket(data, addr, sock):
@@ -163,7 +193,7 @@ def recievePacket(data, addr, sock):
     """
 
     if client_ip:
-        print(addr)
+        debugPrint(addr)
 
     DNSData = DNSServerLookup(data, addr)
     decodedData = decode_packet(DNSData)
@@ -173,7 +203,7 @@ def recievePacket(data, addr, sock):
         sock.sendto(DNSData, addr)
     except:
         if warnings:
-            print("ERROR: failed to send to client")
+            debugPrint("ERROR: failed to send to client")
 
 
 def DNSServerLookup(data, addr, dns = '8.8.8.8'):
@@ -189,16 +219,16 @@ def DNSServerLookup(data, addr, dns = '8.8.8.8'):
         
         if dnsResponse == []:
             if warnings:
-                print("WARNING: DNS server query timeout")
+                debugPrint("WARNING: DNS server query timeout")
         else:
-            print("Successfully got DNS server response")
+            debugPrint("Successfully got DNS server response")
             DNSData, serverAddr = dnsResponse[0][0].recvfrom(512)
             
             return DNSData
             #print(DNSData.decode("hex"))
         
     except:
-        print("ERROR: Failed to send request to dns server")
+        debugPrint("ERROR: Failed to send request to dns server")
 
 
 def commandLine(data):
@@ -208,7 +238,7 @@ def commandLine(data):
     while isRunning:
         keyPress = input("Press 'h' for commands")
         if keyPress == 'd':
-            print(data.dns_table)
+            debugPrint(data.dns_table)
         elif keyPress == 'q':
             file.close()
             isRunning = False
@@ -227,15 +257,15 @@ def main():
         #cache
         dnsCache = dns_table()
         dnsServer = create_socket(ip)
-        print("Socket Created")
+        debugPrint("Socket Created")
         
         senderSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        print("Sender Socket Created")
+        debugPrint("Sender Socket Created")
 
         if debug:
             threading.Thread(target=commandLine, args=(dnsCache,)).start()
 
-        print("Server Started")
+        debugPrint("Server Started")
         while isRunning == 2:
             recievedRequest = select.select([dnsServer], [], [])
 
@@ -252,4 +282,12 @@ def main():
 
         dnsCache.shutdown()
 
-main()
+
+def test_func():
+    pass
+    data = b'`\x98\x81\x80\x00\x01\x00\x04\x00\x00\x00\x00\x04help\x05apple\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\x06\xa3\x00"\x04help\x0corigin-apple\x03com\x06akadns\x03net\x00\xc0,\x00\x05\x00\x01\x00\x00\x00\x1e\x00\x1c\x07help-ar\x05apple\x03com\x07edgekey\xc0I\xc0Z\x00\x05\x00\x01\x00\x00S\x8a\x00\x16\x06e11408\x01d\nakamaiedge\xc0I\xc0\x82\x00\x01\x00\x01\x00\x00\x00\x14\x00\x04hu\xf9K'
+    data1 = b"\x0e8\x81\x80\x00\x01\x00\x03\x00\x00\x00\x00\x02xp\x0citunes-apple\x03com\x06akadns\x03net\x00\x00\x01\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\x00\xb8\x00\x17\x02xp\x05apple\x03com\x07edgekey\xc0'\xc0<\x00\x05\x00\x01\x00\x00L\x1a\x00\x19\x06e17437\x04dsct\nakamaiedge\xc0'\xc0_\x00\x01\x00\x01\x00\x00\x002\x00\x04hq\xba\xd9"
+    decode_packet(data)
+
+test_func()
+#main()
