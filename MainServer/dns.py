@@ -18,7 +18,7 @@ cache_details = True
 cache_entries = False
 
 # Fileoutput (what to output)
-file_output = True
+file_output = False
 file_errors = False
 file_warnings = False
 file_client = False
@@ -36,29 +36,32 @@ update_time = 100 #
 
 class dns_table:
     def __init__(self):
-        
+        """ Dns record table stored in a dictionary
+        Format:
+        table[key] = [name : record_type: value, ttl, now]
+        """
         self.dns_table = {}
 
         # load data from file
 
-    def find(self, name, data_type):
-        if self.__contains_data__(name, data_type):
-            data = self.dns_table[name][data_type]
+    def find(self, name, record_type):
+        if self.__contains_data__(name, record_type):
+            data = self.dns_table[name][record_type]
             return data[0], data[1], data[2]
         else:
             return None
 
-    def add(self, name, data_type, value, ttl):
+    def add(self, name, record_type, value, ttl):
         now = datetime.datetime.now()
-        if not self.__contains_data__(name, data_type):
+        if not self.__contains_data__(name, record_type):
             if not self.__contains_name__(name):
                 self.dns_table[name] = {}
-                self.dns_table[name][data_type] = [value, ttl, now]
+                self.dns_table[name][record_type] = [value, ttl, now]
             else:
-                self.dns_table[name][data_type] = [value, ttl, now]
+                self.dns_table[name][record_type] = [value, ttl, now]
         else:
-            if self.dns_table[name][data_type][:2] != [value, ttl]:
-                self.dns_table[name][data_type] = [value, ttl, now]
+            if self.dns_table[name][record_type][:2] != [value, ttl]:
+                self.dns_table[name][record_type] = [value, ttl, now]
 
     def remove(self, name, data_type):
         self.dns_table.pop()
@@ -103,89 +106,92 @@ def decode_packet(data):
     #packet info 
     
     # Identification, flags, # questions, # answers RRs, # authority RRs, # additional RRs
-    try:
-        questions = int.from_bytes(data[4:6], "big")
-        answers = int.from_bytes(data[6:8], "big")
-        authorityRR = int.from_bytes(data[8:10], "big")
-        additionalRR = int.from_bytes(data[8:10], "big")
+    #try:
+    questions = int.from_bytes(data[4:6], "big")
+    answers = int.from_bytes(data[6:8], "big")
+    authorityRR = int.from_bytes(data[8:10], "big")
+    additionalRR = int.from_bytes(data[8:10], "big")
 
-        headerData = [data[0:2], data[2:4], data[4:6], data[6:8], data[8:10], data[10:12]]
-        questionData = []
-        responseData = []
+    headerData = [data[0:2], data[2:4], data[4:6], data[6:8], data[8:10], data[10:12]]
+    questionData = []
+    responseData = []
 
-        # Queries 
-        data_length = len(data)
+    # Queries 
+    data_length = len(data)
 
+    current_count = 0
+    start_index = 13
+    while current_count < questions:    
+        count = int(data[12])
+        query = b''
+
+        while count > 0 and (start_index + count) < data_length:
+            query += data[start_index: start_index + count]
+
+            end_index = start_index
+            start_index += count + 1
+            count = int(data[end_index + count])
+            if count != 0:
+                query += b'.'
+            else:
+                # type and class 2 bytes
+                dataType = data[start_index: start_index + 2]
+                classData = data[start_index + 2: start_index + 4]
+
+                questionData.append((query, dataType, classData))
+                current_count += 4
+                start_index += 4                    
+
+
+    if headerData[1][0] & 128:
         current_count = 0
-        start_index = 13
-        while current_count < questions:    
-            count = int(data[12])
-            query = b''
+        while current_count < answers:
+            # Name, type, class, TTL, length
 
-            while count > 0 and (start_index + count) < data_length:
-                query += data[start_index: start_index + count]
+            responseName = data[start_index: start_index + 2]
+            responseType = data[start_index + 2: start_index + 4]
+            responseClass = data[start_index + 4: start_index + 6]
+            responseTTL = data[start_index + 6: start_index + 10]
+            responseLength = data[start_index + 10: start_index + 12]
 
-                end_index = start_index
-                start_index += count + 1
-                count = int(data[end_index + count])
-                if count != 0:
-                    query += b'.'
-                else:
-                    # type and class 2 bytes
-                    dataType = data[start_index: start_index + 2]
-                    classData = data[start_index + 2: start_index + 4]
+            answer = b''
 
-                    questionData.append((query, dataType, classData))
-                    current_count += 4
-                    start_index += 4                    
+            current_count += 1
+            start_index += 12
+            count = int(data[start_index])
 
+            # small hack to fix start_index not actually being the start index
 
-        if headerData[1][0] & 128:
-            current_count = 0
-            while current_count < answers:
-                # Name, type, class, TTL, length
-
-                responseName = data[start_index: start_index + 2]
-                responseType = data[start_index + 2: start_index + 4]
-                responseClass = data[start_index + 4: start_index + 6]
-                responseTTL = data[start_index + 6: start_index + 10]
-                responseLength = data[start_index + 10: start_index + 12]
-
-                answer = b''
-
-                current_count += 1
-                start_index += 12
-                count = int(data[start_index])
-
-                # small hack to fix start_index not actually being the start index
-
-                if count == 0:
-                    while count == 0 or count > int.from_bytes(responseLength, 'big'):
-                        start_index += 1
-                        count = int(data[start_index])
-
-                while count > 0 and (start_index + count) < data_length:
+            if count == 0:
+                while count == 0 or count > int.from_bytes(responseLength, 'big'):
                     start_index += 1
-                    end_index = start_index
+                    count = int(data[start_index])
 
-                    answer += data[start_index: start_index + count]
+            answer_end = start_index + int.from_bytes(responseLength, "big")
 
-                    start_index += count
-                    count = int(data[end_index + count])
+            while count > 0 and (start_index + count + 1) < data_length and start_index < answer_end:
+                start_index += 1
+                end_index = start_index
 
-                    if count != 0:
-                        answer += b'.'
-                    else:
-                        responseData.append((answer, responseName, responseType, responseClass, responseTTL, responseLength))
+                answer += data[start_index: start_index + count]
+
+                start_index += count
+                count = int(data[end_index + count])
+
+                if count != 0 and (start_index + count) < data_length:
+                    answer += b'.'
+                else:
+                    start_index +=1
+                    responseData.append((answer, responseName, responseType, responseClass, responseTTL, responseLength))
 
 
-        if file_output:
-            if responseData != []:
-                debugPrint(responseData)
+    if file_output:
+        if responseData != []:
+            debugPrint(responseData)
 
-        return (headerData, questionData, responseData)
-    except:
-        debugPrint("ERROR: failed to decode packet")
+    return (headerData, questionData, responseData)
+    #except:
+    #    debugPrint("ERROR: failed to decode packet")
 
 
 def recievePacket(data, addr, sock):
@@ -248,6 +254,36 @@ def commandLine(data):
         elif keyPress == 'h':
             pass
 
+
+# region DNS REQUEST TYPE
+
+def A():
+    pass
+
+def AAAA():
+    pass
+
+def CNAME():
+    pass
+
+def PTR():
+    pass
+
+def NS():
+    pass
+
+def MX():
+    pass
+
+def SOA():
+    pass
+
+def TXT():
+    pass
+
+# endregion
+
+
 def main():
     """ Main loop"""
     global isRunning
@@ -286,8 +322,10 @@ def main():
 def test_func():
     pass
     data = b'`\x98\x81\x80\x00\x01\x00\x04\x00\x00\x00\x00\x04help\x05apple\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\x06\xa3\x00"\x04help\x0corigin-apple\x03com\x06akadns\x03net\x00\xc0,\x00\x05\x00\x01\x00\x00\x00\x1e\x00\x1c\x07help-ar\x05apple\x03com\x07edgekey\xc0I\xc0Z\x00\x05\x00\x01\x00\x00S\x8a\x00\x16\x06e11408\x01d\nakamaiedge\xc0I\xc0\x82\x00\x01\x00\x01\x00\x00\x00\x14\x00\x04hu\xf9K'
-    data1 = b"\x0e8\x81\x80\x00\x01\x00\x03\x00\x00\x00\x00\x02xp\x0citunes-apple\x03com\x06akadns\x03net\x00\x00\x01\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\x00\xb8\x00\x17\x02xp\x05apple\x03com\x07edgekey\xc0'\xc0<\x00\x05\x00\x01\x00\x00L\x1a\x00\x19\x06e17437\x04dsct\nakamaiedge\xc0'\xc0_\x00\x01\x00\x01\x00\x00\x002\x00\x04hq\xba\xd9"
-    decode_packet(data)
+    data1 = b'\x26\xac\x81\x80\x00\x01\x00\x03\x00\x00\x00\x00\x0c\x73\x65\x74\x74\x69\x6e\x67\x73\x2d\x77\x69\x6e\x04\x64\x61\x74\x61\x09\x6d\x69\x63\x72\x6f\x73\x6f\x66\x74\x03\x63\x6f\x6d\x00\x00\x01\x00\x01\xc0\x0c\x00\x05\x00\x01\x00\x00\x0e\x10\x00\x2d\x18\x61\x74\x6d\x2d\x73\x65\x74\x74\x69\x6e\x67\x73\x66\x65\x2d\x70\x72\x6f\x64\x2d\x67\x65\x6f\x32\x0e\x74\x72\x61\x66\x66\x69\x63\x6d\x61\x6e\x61\x67\x65\x72\x03\x6e\x65\x74\x00\xc0\x3d\x00\x05\x00\x01\x00\x00\x01\x2c\x00\x2e\x14\x73\x65\x74\x74\x69\x6e\x67\x73\x2d\x70\x72\x6f\x64\x2d\x77\x75\x73\x32\x2d\x32\x07\x77\x65\x73\x74\x75\x73\x32\x08\x63\x6c\x6f\x75\x64\x61\x70\x70\x05\x61\x7a\x75\x72\x65\xc0\x28\xc0\x76\x00\x01\x00\x01\x00\x00\x01\x2c\x00\x04\x14\x48\xcd\xd1'
+    data2 = decode_packet(data1)
+
+    pass
 
 test_func()
 #main()
