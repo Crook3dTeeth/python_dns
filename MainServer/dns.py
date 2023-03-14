@@ -3,6 +3,10 @@ import datetime
 import select
 import threading
 
+version = "0303231249"
+
+def get_version():
+    return version
 
 # Global settings
 ip = "192.168.2.51"
