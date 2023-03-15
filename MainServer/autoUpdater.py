@@ -16,7 +16,7 @@ try:
     except:
         raise Exception("ERROR: Failed to copy file")
     try:
-        import newFile
+        pass
     except:
         raise Exception("ERROR: Failed to import new version")
 
