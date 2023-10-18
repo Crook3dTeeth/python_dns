@@ -1,4 +1,3 @@
-# python_dns
+# python_dns WIP
 DNS server made in python
-
-Simple DNS server in python that learns hosts and adapts to traffic
+Currently in creation stage and forwards all requests onto other DNS servers
